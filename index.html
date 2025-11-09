@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IFC to JSON Extractor</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            padding: 40px;
+            max-width: 800px;
+            width: 100%;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 32px;
+        }
+        
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 16px;
+        }
+        
+        .upload-area {
+            border: 3px dashed #667eea;
+            border-radius: 15px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: #f8f9ff;
+            margin-bottom: 20px;
+        }
+        
+        .upload-area:hover {
+            border-color: #764ba2;
+            background: #f0f1ff;
+        }
+        
+        .upload-area.dragover {
+            border-color: #764ba2;
+            background: #e8e9ff;
+            transform: scale(1.02);
+        }
+        
+        .upload-icon {
+            font-size: 64px;
+            color: #667eea;
+            margin-bottom: 20px;
+        }
+        
+        .upload-text {
+            color: #333;
+            font-size: 18px;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+        
+        .upload-hint {
+            color: #666;
+            font-size: 14px;
+        }
+        
+        #fileInput {
+            display: none;
+        }
+        
+        .progress-container {
+            display: none;
+            margin-top: 20px;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 30px;
+            background: #e0e0e0;
+            border-radius: 15px;
+            overflow: hidden;
+            margin-bottom: 15px;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            width: 0%;
+            transition: width 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        
+        .status-text {
+            color: #666;
+            text-align: center;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        
+        .results {
+            display: none;
+            margin-top: 30px;
+            padding: 25px;
+            background: #f8f9ff;
+            border-radius: 15px;
+        }
+        
+        .results h3 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 20px;
+        }
+        
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .stat-item {
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .stat-label {
+            color: #666;
+            font-size: 13px;
+            margin-bottom: 5px;
+        }
+        
+        .stat-value {
+            color: #333;
+            font-size: 24px;
+            font-weight: bold;
+        }
+        
+        .download-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .download-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+        }
+        
+        .download-btn:active {
+            transform: translateY(0);
+        }
+        
+        .error {
+            background: #ffebee;
+            color: #c62828;
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 20px;
+            display: none;
+        }
+        
+        .reset-btn {
+            background: #f5f5f5;
+            color: #666;
+            border: 2px solid #ddd;
+            padding: 12px 30px;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 15px;
+            width: 100%;
+            transition: all 0.2s;
+        }
+        
+        .reset-btn:hover {
+            background: #e0e0e0;
+            border-color: #bbb;
+        }
+
+        .log-container {
+            max-height: 200px;
+            overflow-y: auto;
+            background: white;
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            color: #333;
+        }
+
+        .log-entry {
+            padding: 3px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .log-entry:last-child {
+            border-bottom: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏗️ IFC to JSON Extractor</h1>
+        <p class="subtitle">Extract lightweight JSON data from IFC files for web visualization</p>
+        
+        <div class="upload-area" id="uploadArea">
+            <div class="upload-icon">📁</div>
+            <div class="upload-text">Click or drag IFC file here</div>
+            <div class="upload-hint">Supports .ifc files up to 100MB</div>
+        </div>
+        
+        <input type="file" id="fileInput" accept=".ifc">
+        
+        <div class="progress-container" id="progressContainer">
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill">0%</div>
+            </div>
+            <div class="status-text" id="statusText">Initializing...</div>
+            <div class="log-container" id="logContainer"></div>
+        </div>
+        
+        <div class="error" id="errorContainer"></div>
+        
+        <div class="results" id="results">
+            <h3>✅ Extraction Complete!</h3>
+            <div class="stat-grid">
+                <div class="stat-item">
+                    <div class="stat-label">Elements</div>
+                    <div class="stat-value" id="elementCount">0</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Layers</div>
+                    <div class="stat-value" id="layerCount">0</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">File Size</div>
+                    <div class="stat-value" id="fileSize">0 KB</div>
+                </div>
+            </div>
+            <button class="download-btn" id="downloadBtn">📥 Download JSON</button>
+            <button class="reset-btn" id="resetBtn">🔄 Process Another File</button>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/web-ifc@0.0.44/web-ifc-api.js"></script>
+    <script>
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const progressContainer = document.getElementById('progressContainer');
+        const progressFill = document.getElementById('progressFill');
+        const statusText = document.getElementById('statusText');
+        const logContainer = document.getElementById('logContainer');
+        const results = document.getElementById('results');
+        const errorContainer = document.getElementById('errorContainer');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        
+        let extractedData = null;
+        let ifcApi = null;
+
+        // Layer mapping from IFC types
+        const layerMapping = {
+            'IFCCOLUMN': { layer: 'Structure', subLayer: 'Columns', color: '#4CAF50' },
+            'IFCBEAM': { layer: 'Structure', subLayer: 'Beams', color: '#2196F3' },
+            'IFCMEMBER': { layer: 'Structure', subLayer: 'Members', color: '#00BCD4' },
+            'IFCPLATE': { layer: 'Structure', subLayer: 'Plates', color: '#009688' },
+            'IFCFOOTING': { layer: 'Structure', subLayer: 'Foundations', color: '#795548' },
+            'IFCPILE': { layer: 'Structure', subLayer: 'Foundations', color: '#6D4C41' },
+            'IFCWALL': { layer: 'Architecture', subLayer: 'Walls', color: '#BDBDBD' },
+            'IFCWALLSTANDARDCASE': { layer: 'Architecture', subLayer: 'Walls', color: '#BDBDBD' },
+            'IFCCURTAINWALL': { layer: 'Architecture', subLayer: 'Walls', color: '#90A4AE' },
+            'IFCSLAB': { layer: 'Architecture', subLayer: 'Slabs', color: '#9E9E9E' },
+            'IFCROOF': { layer: 'Architecture', subLayer: 'Roofs', color: '#607D8B' },
+            'IFCDOOR': { layer: 'Architecture', subLayer: 'Doors', color: '#8D6E63' },
+            'IFCWINDOW': { layer: 'Architecture', subLayer: 'Windows', color: '#64B5F6' },
+            'IFCSTAIR': { layer: 'Architecture', subLayer: 'Stairs', color: '#757575' },
+            'IFCRAILING': { layer: 'Architecture', subLayer: 'Railings', color: '#9E9E9E' },
+            'IFCCOVERING': { layer: 'Architecture', subLayer: 'Coverings', color: '#BCAAA4' },
+            'IFCCEILING': { layer: 'Architecture', subLayer: 'Ceilings', color: '#E0E0E0' },
+            'IFCPIPESEGMENT': { layer: 'MEP', subLayer: 'Piping', color: '#2196F3' },
+            'IFCPIPEFITTING': { layer: 'MEP', subLayer: 'Piping', color: '#1976D2' },
+            'IFCVALVE': { layer: 'MEP', subLayer: 'Piping', color: '#1565C0' },
+            'IFCPUMP': { layer: 'MEP', subLayer: 'Piping', color: '#0D47A1' },
+            'IFCFLOWSEGMENT': { layer: 'MEP', subLayer: 'Piping', color: '#42A5F5' },
+            'IFCDUCTSEGMENT': { layer: 'MEP', subLayer: 'HVAC', color: '#9C27B0' },
+            'IFCDUCTFITTING': { layer: 'MEP', subLayer: 'HVAC', color: '#7B1FA2' },
+            'IFCAIRTERMINAL': { layer: 'MEP', subLayer: 'HVAC', color: '#6A1B9A' },
+            'IFCFAN': { layer: 'MEP', subLayer: 'HVAC', color: '#4A148C' },
+            'IFCCABLESEGMENT': { layer: 'MEP', subLayer: 'Electrical', color: '#FF9800' },
+            'IFCCABLECARRIERSEGMENT': { layer: 'MEP', subLayer: 'Electrical', color: '#F57C00' },
+            'IFCCABLECARRIERFITTING': { layer: 'MEP', subLayer: 'Electrical', color: '#EF6C00' },
+            'IFCLIGHTFIXTURE': { layer: 'MEP', subLayer: 'Electrical', color: '#FFB300' },
+            'IFCOUTLET': { layer: 'MEP', subLayer: 'Electrical', color: '#FFA000' },
+            'IFCSWITCHINGDEVICE': { layer: 'MEP', subLayer: 'Electrical', color: '#FF8F00' },
+            'IFCSITE': { layer: 'Site', subLayer: 'Site', color: '#8BC34A' },
+            'IFCBUILDING': { layer: 'Site', subLayer: 'Building', color: '#7CB342' },
+            'IFCBUILDINGSTOREY': { layer: 'Site', subLayer: 'Stories', color: '#689F38' },
+            'IFCSPACE': { layer: 'Site', subLayer: 'Spaces', color: '#558B2F' },
+        };
+
+        function addLog(message) {
+            const logEntry = document.createElement('div');
+            logEntry.className = 'log-entry';
+            logEntry.textContent = `${new Date().toLocaleTimeString()}: ${message}`;
+            logContainer.appendChild(logEntry);
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+
+        function updateProgress(percent, status) {
+            progressFill.style.width = percent + '%';
+            progressFill.textContent = Math.round(percent) + '%';
+            statusText.textContent = status;
+            addLog(status);
+        }
+
+        function showError(message) {
+            errorContainer.textContent = message;
+            errorContainer.style.display = 'block';
+            progressContainer.style.display = 'none';
+        }
+
+        uploadArea.addEventListener('click', () => fileInput.click());
+        
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+        
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+        
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            const file = e.dataTransfer.files[0];
+            if (file && file.name.toLowerCase().endsWith('.ifc')) {
+                processIFCFile(file);
+            } else {
+                showError('Please drop a valid IFC file');
+            }
+        });
+        
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) processIFCFile(file);
+        });
+
+        async function processIFCFile(file) {
+            try {
+                errorContainer.style.display = 'none';
+                uploadArea.style.display = 'none';
+                progressContainer.style.display = 'block';
+                results.style.display = 'none';
+                logContainer.innerHTML = '';
+                
+                updateProgress(10, 'Initializing web-ifc...');
+                
+                ifcApi = new WebIFC.IfcAPI();
+                await ifcApi.Init();
+                
+                updateProgress(20, 'Reading IFC file...');
+                
+                const arrayBuffer = await file.arrayBuffer();
+                const data = new Uint8Array(arrayBuffer);
+                
+                updateProgress(30, 'Opening IFC model...');
+                
+                const modelID = ifcApi.OpenModel(data);
+                
+                updateProgress(40, 'Extracting elements...');
+                
+                const elementsData = await extractAllElements(modelID);
+                
+                updateProgress(70, 'Aligning to grid...');
+                
+                alignToGrid(elementsData);
+                
+                updateProgress(80, 'Calculating bounding box...');
+                
+                const boundingBox = calculateBoundingBox(elementsData);
+                
+                updateProgress(85, 'Generating layer structure...');
+                
+                const layers = generateLayersStructure(elementsData);
+                
+                updateProgress(90, 'Creating JSON structure...');
+                
+                extractedData = {
+                    project: {
+                        name: file.name.replace('.ifc', ''),
+                        boundingBox: boundingBox,
+                        units: 'meters',
+                        elementCount: elementsData.length
+                    },
+                    layers: layers,
+                    elements: elementsData
+                };
+                
+                updateProgress(100, 'Complete!');
+                
+                setTimeout(() => {
+                    progressContainer.style.display = 'none';
+                    results.style.display = 'block';
+                    
+                    document.getElementById('elementCount').textContent = elementsData.length;
+                    document.getElementById('layerCount').textContent = layers.length;
+                    
+                    const jsonSize = new Blob([JSON.stringify(extractedData)]).size;
+                    document.getElementById('fileSize').textContent = (jsonSize / 1024).toFixed(2) + ' KB';
+                }, 500);
+                
+                ifcApi.CloseModel(modelID);
+                
+            } catch (error) {
+                console.error('Error processing IFC:', error);
+                showError('Error processing IFC file: ' + error.message);
+            }
+        }
+
+        function extractAllElements(modelID) {
+            const elementsData = [];
+            const typesToExtract = Object.keys(layerMapping);
+            
+            typesToExtract.forEach(ifcType => {
+                try {
+                    const elements = ifcApi.GetLineIDsWithType(modelID, WebIFC[ifcType]);
+                    
+                    for (let i = 0; i < elements.size(); i++) {
+                        const expressID = elements.get(i);
+                        
+                        try {
+                            const element = ifcApi.GetLine(modelID, expressID);
+                            const geometry = extractGeometry(modelID, expressID);
+                            
+                            if (!geometry) continue;
+                            
+                            const layerInfo = layerMapping[ifcType] || { 
+                                layer: 'Other', 
+                                subLayer: 'Miscellaneous', 
+                                color: '#9E9E9E' 
+                            };
+                            
+                            const localAxes = { xAxis: [1, 0, 0], yAxis: [0, 1, 0], zAxis: [0, 0, 1] };
+                            const crossSection = inferCrossSection(ifcType, geometry);
+                            
+                            const name = element.Name?.value || `${ifcType}_${expressID}`;
+                            const guid = element.GlobalId?.value || `guid_${expressID}`;
+                            
+                            elementsData.push({
+                                id: guid,
+                                expressID: expressID,
+                                name: name,
+                                type: ifcType,
+                                layer: layerInfo.layer,
+                                subLayer: layerInfo.subLayer,
+                                geometry: {
+                                    center: geometry.center,
+                                    startPoint: geometry.startPoint,
+                                    endPoint: geometry.endPoint,
+                                    localAxes: localAxes
+                                },
+                                crossSection: crossSection,
+                                color: layerInfo.color,
+                                material: 'Default'
+                            });
+                            
+                        } catch (err) {
+                            continue;
+                        }
+                    }
+                } catch (err) {
+                    continue;
+                }
+            });
+            
+            return elementsData;
+        }
+
+        function extractGeometry(modelID, expressID) {
+            try {
+                const geometry = ifcApi.GetGeometry(modelID, expressID);
+                if (!geometry) return null;
+                
+                const verts = ifcApi.GetVertexArray(geometry.GetVertexData(), geometry.GetVertexDataSize());
+                if (verts.length === 0) return null;
+                
+                const vertices = [];
+                for (let i = 0; i < verts.length; i += 3) {
+                    vertices.push([verts[i], verts[i + 1], verts[i + 2]]);
+                }
+                
+                const xs = vertices.map(v => v[0]);
+                const ys = vertices.map(v => v[1]);
+                const zs = vertices.map(v => v[2]);
+                
+                const minPoint = [Math.min(...xs), Math.min(...ys), Math.min(...zs)];
+                const maxPoint = [Math.max(...xs), Math.max(...ys), Math.max(...zs)];
+                const center = [(minPoint[0] + maxPoint[0]) / 2, (minPoint[1] + maxPoint[1]) / 2, (minPoint[2] + maxPoint[2]) / 2];
+                const dimensions = [maxPoint[0] - minPoint[0], maxPoint[1] - minPoint[1], maxPoint[2] - minPoint[2]];
+                
+                return { center, startPoint: minPoint, endPoint: maxPoint, dimensions };
+            } catch (error) {
+                return null;
+            }
+        }
+
+        function inferCrossSection(ifcType, geometry) {
+            const dims = geometry.dimensions;
+            
+            if (ifcType.includes('COLUMN')) {
+                return Math.abs(dims[0] - dims[1]) < 0.1 * dims[0] 
+                    ? { type: 'circular', shape: 'circle', radius: dims[0] / 2 }
+                    : { type: 'i-shape', shape: 'I', overallWidth: dims[0], overallDepth: dims[1], webThickness: dims[0] * 0.1, flangeThickness: dims[1] * 0.15 };
+            }
+            if (ifcType.includes('BEAM')) {
+                return { type: 'i-shape', shape: 'I', overallWidth: dims[0], overallDepth: dims[2], webThickness: dims[0] * 0.1, flangeThickness: dims[2] * 0.15 };
+            }
+            if (ifcType.includes('PIPE')) {
+                return { type: 'hollow-circular', shape: 'hollow-circle', outerRadius: Math.min(dims[0], dims[1]) / 2, wallThickness: Math.min(dims[0], dims[1]) * 0.1 };
+            }
+            if (ifcType.includes('DUCT')) {
+                return { type: 'hollow-rectangular', shape: 'hollow-rectangle', width: dims[0], height: dims[1], wallThickness: Math.min(dims[0], dims[1]) * 0.05 };
+            }
+            
+            return { type: 'box', shape: 'box', width: dims[0], depth: dims[1], height: dims[2] };
+        }
+
+        function calculateBoundingBox(elementsData) {
+            if (!elementsData || elementsData.length === 0) return { min: [0, 0, 0], max: [0, 0, 0] };
+            
+            const allPoints = [];
+            elementsData.forEach(element => {
+                allPoints.push(element.geometry.startPoint);
+                allPoints.push(element.geometry.endPoint);
+            });
+            
+            const xs = allPoints.map(p => p[0]);
+            const ys = allPoints.map(p => p[1]);
+            const zs = allPoints.map(p => p[2]);
+            
+            return { min: [Math.min(...xs), Math.min(...ys), Math.min(...zs)], max: [Math.max(...xs), Math.max(...ys), Math.max(...zs)] };
+        }
+
+        function alignToGrid(elementsData) {
+            if (!elementsData || elementsData.length === 0) return;
+            
+            let minZ = Infinity;
+            elementsData.forEach(element => {
+                minZ = Math.min(minZ, element.geometry.startPoint[2], element.geometry.endPoint[2]);
+            });
+            
+            elementsData.forEach(element => {
+                element.geometry.center[2] -= minZ;
+                element.geometry.startPoint[2] -= minZ;
+                element.geometry.endPoint[2] -= minZ;
+            });
+        }
+
+        function generateLayersStructure(elementsData) {
+            const layers = {};
+            
+            elementsData.forEach(element => {
+                const layer = element.layer;
+                const subLayer = element.subLayer;
+                
+                if (!layers[layer]) layers[layer] = { name: layer, visible: true, subLayers: {} };
+                if (!layers[layer].subLayers[subLayer]) layers[layer].subLayers[subLayer] = { name: subLayer, visible: true, elementIds: [] };
+                
+                layers[layer].subLayers[subLayer].elementIds.push(element.id);
+            });
+            
+            return Object.values(layers).map(layer => ({
+                name: layer.name,
+                visible: layer.visible,
+                subLayers: Object.values(layer.subLayers)
+            }));
+        }
+
+        downloadBtn.addEventListener('click', () => {
+            if (!extractedData) return;
+            
+            const jsonStr = JSON.stringify(extractedData, null, 2);
+            const blob = new Blob([jsonStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = extractedData.project.name + '_data.json';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        });
+
+        resetBtn.addEventListener('click', () => {
+            fileInput.value = '';
+            uploadArea.style.display = 'block';
+            progressContainer.style.display = 'none';
+            results.style.display = 'none';
+            errorContainer.style.display = 'none';
+            extractedData = null;
+        });
+    </script>
+</body>
+</html>
