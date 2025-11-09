@@ -810,80 +810,152 @@
             const columns = [];
             const beams = [];
             
+            console.log('Starting structural data extraction...');
+            
             for (const id in entities) {
                 const entity = entities[id];
                 
                 if (entity.type === 'IFCCOLUMNSTANDARDCASE' || entity.type === 'IFCCOLUMN') {
+                    console.log('Found column entity:', entity.type, 'ID:', id);
                     const columnData = extractElementData(entity, entities, 'column');
-                    if (columnData) columns.push(columnData);
+                    if (columnData) {
+                        columns.push(columnData);
+                        console.log('Successfully extracted column:', columnData.id);
+                    } else {
+                        console.warn('Failed to extract column data for ID:', id);
+                    }
                 }
                 
                 if (entity.type === 'IFCBEAMSTANDARDCASE' || entity.type === 'IFCBEAM') {
+                    console.log('Found beam entity:', entity.type, 'ID:', id);
                     const beamData = extractElementData(entity, entities, 'beam');
-                    if (beamData) beams.push(beamData);
+                    if (beamData) {
+                        beams.push(beamData);
+                        console.log('Successfully extracted beam:', beamData.id);
+                    } else {
+                        console.warn('Failed to extract beam data for ID:', id);
+                    }
                 }
             }
             
+            console.log('Extraction complete. Columns:', columns.length, 'Beams:', beams.length);
             return { columns, beams };
         }
 
         function extractElementData(element, entities, type) {
             try {
+                console.log(`Extracting ${type} data for element:`, element.id);
+                console.log('Element params:', element.params);
+                
                 const nameMatch = element.params[2]?.match(/'([^']+)'/);
                 const name = nameMatch ? nameMatch[1] : element.id;
+                console.log('Element name:', name);
                 
-                const placementRef = element.params[5]?.match(/#(\d+)/)?.[1];
-                const shapeRef = element.params[6]?.match(/#(\d+)/)?.[1];
+                // Try different parameter positions for placement (params 4, 5, or 6)
+                let placementRef = element.params[5]?.match(/#(\d+)/)?.[1];
+                if (!placementRef) placementRef = element.params[4]?.match(/#(\d+)/)?.[1];
+                if (!placementRef) placementRef = element.params[6]?.match(/#(\d+)/)?.[1];
                 
-                if (!placementRef || !shapeRef) return null;
+                // Try different parameter positions for shape (params 5, 6, or 7)
+                let shapeRef = element.params[6]?.match(/#(\d+)/)?.[1];
+                if (!shapeRef) shapeRef = element.params[5]?.match(/#(\d+)/)?.[1];
+                if (!shapeRef) shapeRef = element.params[7]?.match(/#(\d+)/)?.[1];
+                
+                console.log('Placement ref:', placementRef, 'Shape ref:', shapeRef);
+                
+                if (!placementRef || !shapeRef) {
+                    console.warn('Missing placement or shape reference');
+                    return null;
+                }
                 
                 const placement = entities[placementRef];
                 const shape = entities[shapeRef];
                 
-                if (!placement || !shape) return null;
+                if (!placement || !shape) {
+                    console.warn('Placement or shape entity not found');
+                    return null;
+                }
+                
+                console.log('Placement type:', placement.type);
+                console.log('Shape type:', shape.type);
                 
                 const axisRef = placement.params[1]?.match(/#(\d+)/)?.[1];
-                if (!axisRef) return null;
+                if (!axisRef) {
+                    console.warn('No axis reference in placement');
+                    return null;
+                }
                 
                 const axis = entities[axisRef];
-                if (!axis) return null;
+                if (!axis) {
+                    console.warn('Axis entity not found');
+                    return null;
+                }
+                
+                console.log('Axis type:', axis.type);
                 
                 const originRef = axis.params[0]?.match(/#(\d+)/)?.[1];
                 const directionRef = axis.params[1]?.match(/#(\d+)/)?.[1];
                 
-                if (!originRef || !directionRef) return null;
+                if (!originRef || !directionRef) {
+                    console.warn('Missing origin or direction reference');
+                    return null;
+                }
                 
                 const origin = entities[originRef];
                 const direction = entities[directionRef];
                 
-                if (!origin || !direction) return null;
+                if (!origin || !direction) {
+                    console.warn('Origin or direction entity not found');
+                    return null;
+                }
                 
                 const originCoords = parseCoordinates(origin.params);
                 const directionVec = parseCoordinates(direction.params);
+                
+                console.log('Origin coords:', originCoords);
+                console.log('Direction vec:', directionVec);
                 
                 const representations = shape.params[3]?.match(/#(\d+)/g) || [];
                 let extrudeLength = 0;
                 let profile = null;
                 
+                console.log('Representations:', representations.length);
+                
                 for (const repRef of representations) {
                     const rep = entities[repRef.substring(1)];
                     if (!rep) continue;
                     
+                    console.log('Representation type:', rep.type);
+                    
                     const items = rep.params[3]?.match(/#(\d+)/g) || [];
+                    console.log('Items in representation:', items.length);
+                    
                     for (const itemRef of items) {
                         const item = entities[itemRef.substring(1)];
-                        if (item && item.type === 'IFCEXTRUDEDAREASOLID') {
+                        if (!item) continue;
+                        
+                        console.log('Item type:', item.type);
+                        
+                        if (item.type === 'IFCEXTRUDEDAREASOLID') {
+                            console.log('Found IFCEXTRUDEDAREASOLID!');
+                            console.log('Item params:', item.params);
+                            
                             extrudeLength = parseFloat(item.params[3]) / 100;
+                            console.log('Extrude length:', extrudeLength);
                             
                             const profileRef = item.params[0]?.match(/#(\d+)/)?.[1];
                             if (profileRef) {
                                 profile = parseProfile(entities[profileRef]);
+                                console.log('Profile:', profile);
                             }
                         }
                     }
                 }
                 
-                if (!profile || extrudeLength === 0) return null;
+                if (!profile || extrudeLength === 0) {
+                    console.warn('Missing profile or zero extrude length. Profile:', profile, 'Length:', extrudeLength);
+                    return null;
+                }
                 
                 const start = [
                     originCoords[0] / 100,
@@ -896,6 +968,9 @@
                     start[1] + (directionVec[1] * extrudeLength),
                     start[2] + (directionVec[2] * extrudeLength)
                 ];
+                
+                console.log('Final start:', start);
+                console.log('Final end:', end);
                 
                 return {
                     id: name,
