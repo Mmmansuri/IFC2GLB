@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Structural Optimization Viewer</title>
+    <title>Structural Model Viewer</title>
     <style>
         * {
             margin: 0;
@@ -164,12 +164,6 @@
         #container.dark-canvas {
             background: #1a1a1a;
         }
-        
-        canvas {
-            display: block;
-            width: 100%;
-            height: 100%;
-        }
 
         /* Canvas Background Toggle */
         .canvas-bg-toggle {
@@ -207,30 +201,6 @@
 
         #container.dark-canvas .canvas-bg-label {
             color: white;
-        }
-
-        /* Layers Panel - Inside Canvas */
-        .layers-panel {
-            display: none;
-        }
-
-        /* Scrollbar for layers panel */
-        .layers-panel::-webkit-scrollbar {
-            width: 6px;
-        }
-
-        .layers-panel::-webkit-scrollbar-track {
-            background: rgba(0, 0, 0, 0.1);
-            border-radius: 10px;
-        }
-
-        .layers-panel::-webkit-scrollbar-thumb {
-            background: rgba(59, 130, 246, 0.5);
-            border-radius: 10px;
-        }
-
-        .layers-panel::-webkit-scrollbar-thumb:hover {
-            background: rgba(59, 130, 246, 0.7);
         }
 
         /* View Controls Overlay - Right Bottom with Glassmorphism */
@@ -285,6 +255,37 @@
 
         #container.dark-canvas .control-item {
             color: #cbd5e1;
+        }
+
+        /* Loading indicator */
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #1e3a8a;
+            font-size: 18px;
+            text-align: center;
+            z-index: 10;
+        }
+
+        #container.dark-canvas #loading {
+            color: #93c5fd;
+        }
+        
+        .spinner {
+            border: 4px solid rgba(59, 130, 246, 0.3);
+            border-top: 4px solid #3b82f6;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
 
         /* About Section */
@@ -557,7 +558,7 @@
 
     <!-- Main Content -->
     <div class="page-wrapper">
-        <!-- Canvas with Layers Inside -->
+        <!-- Canvas Container -->
         <div class="canvas-wrapper">
             <div id="container">
                 <!-- Canvas Background Toggle -->
@@ -578,7 +579,10 @@
                     </div>
                 </div>
 
-                <canvas id="canvas"></canvas>
+                <div id="loading">
+                    <div class="spinner"></div>
+                    Loading model...
+                </div>
                 
                 <!-- View Controls -->
                 <div id="controls">
@@ -679,75 +683,7 @@
     </footer>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="structureData.js"></script>
     <script>
-        // ============================================
-        // AUTOMATIC BUILDING CALCULATIONS
-        // ============================================
-        
-        // Calculate building bounds automatically from data
-        function calculateBuildingBounds() {
-            let minX = Infinity, minY = Infinity, minZ = Infinity;
-            let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
-            
-            // Check all element types
-            const allElements = [
-                ...structuralData.columns,
-                ...structuralData.beams,
-                ...structuralData.braces
-            ];
-            
-            allElements.forEach(element => {
-                [element.start, element.end].forEach(point => {
-                    minX = Math.min(minX, point[0]);
-                    minY = Math.min(minY, point[1]);
-                    minZ = Math.min(minZ, point[2]);
-                    maxX = Math.max(maxX, point[0]);
-                    maxY = Math.max(maxY, point[1]);
-                    maxZ = Math.max(maxZ, point[2]);
-                });
-            });
-            
-            structuralData.slabs.forEach(slab => {
-                slab.points.forEach(point => {
-                    minX = Math.min(minX, point[0]);
-                    minY = Math.min(minY, point[1]);
-                    minZ = Math.min(minZ, point[2]);
-                    maxX = Math.max(maxX, point[0]);
-                    maxY = Math.max(maxY, point[1]);
-                    maxZ = Math.max(maxZ, point[2]);
-                });
-            });
-            
-            structuralData.walls.forEach(wall => {
-                wall.points.forEach(point => {
-                    minX = Math.min(minX, point[0]);
-                    minY = Math.min(minY, point[1]);
-                    minZ = Math.min(minZ, point[2]);
-                    maxX = Math.max(maxX, point[0]);
-                    maxY = Math.max(maxY, point[1]);
-                    maxZ = Math.max(maxZ, point[2]);
-                });
-            });
-            
-            const centerX = (minX + maxX) / 2;
-            const centerY = (minY + maxY) / 2;
-            const centerZ = (minZ + maxZ) / 2;
-            
-            const sizeX = maxX - minX;
-            const sizeY = maxY - minY;
-            const sizeZ = maxZ - minZ;
-            
-            const maxSize = Math.max(sizeX, sizeY, sizeZ);
-            
-            return {
-                center: { x: centerX, y: centerY, z: centerZ },
-                size: { x: sizeX, y: sizeY, z: sizeZ },
-                maxSize: maxSize,
-                bounds: { minX, minY, minZ, maxX, maxY, maxZ }
-            };
-        }
-
         // ============================================
         // INITIALIZATION AND SETUP
         // ============================================
@@ -822,7 +758,7 @@
         // ============================================
 
         let scene, camera, renderer;
-        let structure;
+        let model;
         let mouseX = 0, mouseY = 0;
         let targetRotationX = 0, targetRotationY = 0;
         let isDragging = false;
@@ -832,11 +768,6 @@
         let keys = {};
         let moveSpeed = 0.3;
         let canvasHasFocus = false;
-        
-        // Calculate building properties automatically
-        const buildingBounds = calculateBuildingBounds();
-        const buildingCenter = buildingBounds.center;
-        const buildingMaxSize = buildingBounds.maxSize;
 
         function init() {
             scene = new THREE.Scene();
@@ -847,58 +778,55 @@
             camera = new THREE.PerspectiveCamera(
                 50,
                 container.clientWidth / container.clientHeight,
-                1,
-                buildingMaxSize * 10
+                0.1,
+                1000
             );
             
-            // Auto-position camera based on building size
-            const cameraDistance = buildingMaxSize * 2;
-            camera.position.set(
-                buildingCenter.x + cameraDistance * 0.8,
-                buildingCenter.y + cameraDistance * 0.5,
-                buildingCenter.z + cameraDistance * 0.8
-            );
+            camera.position.set(5, 5, 10);
             
-            cameraTarget = new THREE.Vector3(buildingCenter.x, buildingCenter.y, buildingCenter.z);
-            cameraPan = new THREE.Vector3(buildingCenter.x, buildingCenter.y, buildingCenter.z);
+            cameraTarget = new THREE.Vector3(0, 0, 0);
+            cameraPan = new THREE.Vector3(0, 0, 0);
             camera.lookAt(cameraTarget);
 
-            const canvas = document.getElementById('canvas');
-            renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+            renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(container.clientWidth, container.clientHeight);
             renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.shadowMap.enabled = true;
+            container.appendChild(renderer.domElement);
 
             const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
             scene.add(ambientLight);
 
             const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
             directionalLight.position.set(20, 30, 20);
+            directionalLight.castShadow = true;
             scene.add(directionalLight);
 
             const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.4);
             directionalLight2.position.set(-20, 20, -20);
             scene.add(directionalLight2);
 
-            createStructureFromData();
+            // Load the GLB model
+            loadGLBModel('model.glb');
 
             // Canvas focus management
-            canvas.addEventListener('mouseenter', () => {
+            renderer.domElement.addEventListener('mouseenter', () => {
                 canvasHasFocus = true;
             });
             
-            canvas.addEventListener('mouseleave', () => {
+            renderer.domElement.addEventListener('mouseleave', () => {
                 canvasHasFocus = false;
             });
 
-            canvas.addEventListener('mousedown', (e) => {
+            renderer.domElement.addEventListener('mousedown', (e) => {
                 canvasHasFocus = true;
                 onMouseDown(e);
             });
 
-            canvas.addEventListener('mousemove', onMouseMove);
-            canvas.addEventListener('mouseup', onMouseUp);
-            canvas.addEventListener('wheel', onWheel);
-            canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+            renderer.domElement.addEventListener('mousemove', onMouseMove);
+            renderer.domElement.addEventListener('mouseup', onMouseUp);
+            renderer.domElement.addEventListener('wheel', onWheel);
+            renderer.domElement.addEventListener('contextmenu', (e) => e.preventDefault());
 
             window.addEventListener('keydown', onKeyDown);
             window.addEventListener('keyup', onKeyUp);
@@ -908,306 +836,326 @@
         }
 
         // ============================================
-        // ELEMENT CREATION FUNCTIONS
+        // GLB MODEL LOADING
         // ============================================
 
-        function createStructureFromData() {
-            structure = new THREE.Group();
-
-            // Create grid at height 0 - size based on building
-            const gridSize = Math.max(buildingBounds.size.x, buildingBounds.size.z) * 2;
-            const gridDivisions = Math.ceil(gridSize / 2);
-            const gridHelper = new THREE.GridHelper(gridSize, gridDivisions, 0x888888, 0xcccccc);
-            gridHelper.position.set(buildingCenter.x, 0, buildingCenter.z);
-            structure.add(gridHelper);
-
-            // Create global axes - size based on building
-            const axesSize = buildingMaxSize * 0.3;
-            const axesHelper = new THREE.AxesHelper(axesSize);
-            structure.add(axesHelper);
-
-            // Create supports
-            structuralData.supports.forEach(support => {
-                createSupport(support);
-            });
-
-            // Create columns
-            structuralData.columns.forEach(column => {
-                createColumn(column);
-            });
-
-            // Create beams
-            structuralData.beams.forEach(beam => {
-                createBeam(beam);
-            });
-
-            // Create braces
-            structuralData.braces.forEach(brace => {
-                createBrace(brace);
-            });
-
-            // Create slabs
-            structuralData.slabs.forEach(slab => {
-                createSlab(slab);
-            });
-
-            // Create walls
-            structuralData.walls.forEach(wall => {
-                createWall(wall);
-            });
-
-            scene.add(structure);
+        function loadGLBModel(url) {
+            const loader = new THREE.GLTFLoader();
+            
+            fetch(url)
+                .then(response => response.arrayBuffer())
+                .then(arrayBuffer => {
+                    loader.parse(arrayBuffer, '', function(gltf) {
+                        model = gltf.scene;
+                        
+                        // Center and scale the model
+                        const box = new THREE.Box3().setFromObject(model);
+                        const center = box.getCenter(new THREE.Vector3());
+                        const size = box.getSize(new THREE.Vector3());
+                        
+                        const maxDim = Math.max(size.x, size.y, size.z);
+                        const scale = 8 / maxDim;
+                        model.scale.setScalar(scale);
+                        
+                        model.position.sub(center.multiplyScalar(scale));
+                        
+                        scene.add(model);
+                        
+                        // Update camera to view the model
+                        const distance = maxDim * 2;
+                        camera.position.set(distance * 0.8, distance * 0.5, distance * 0.8);
+                        cameraTarget.copy(center);
+                        cameraPan.copy(center);
+                        camera.lookAt(cameraTarget);
+                        
+                        document.getElementById('loading').style.display = 'none';
+                    }, function(error) {
+                        console.error('Error loading model:', error);
+                        document.getElementById('loading').innerHTML = 
+                            '<div style="color: #ff6b6b;">Error loading model. Please check the file.</div>';
+                    });
+                })
+                .catch(error => {
+                    console.error('Error fetching model:', error);
+                    document.getElementById('loading').innerHTML = 
+                        '<div style="color: #ff6b6b;">Error loading model file.</div>';
+                });
         }
 
-        function createColumn(columnData) {
-            const start = new THREE.Vector3(...columnData.start);
-            const end = new THREE.Vector3(...columnData.end);
-            const section = CROSS_SECTIONS[columnData.section];
+        // GLTFLoader implementation
+        THREE.GLTFLoader = (function() {
+            function GLTFLoader() {}
             
-            const direction = new THREE.Vector3().subVectors(end, start);
-            const length = direction.length();
-            const midpoint = new THREE.Vector3().addVectors(start, end).multiplyScalar(0.5);
-
-            let geometry;
-            if (section.type === 'circular') {
-                geometry = new THREE.CylinderGeometry(section.diameter / 2, section.diameter / 2, length, 8);
-            } else if (section.type === 'rectangular') {
-                geometry = new THREE.BoxGeometry(section.width, length, section.height);
-            }
-
-            const material = new THREE.MeshPhongMaterial({
-                color: ELEMENT_COLORS.COLUMN,
-                shininess: 30
-            });
-
-            const column = new THREE.Mesh(geometry, material);
-            column.position.copy(midpoint);
-
-            // Align column with direction vector
-            const quaternion = new THREE.Quaternion();
-            quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.normalize());
-            column.setRotationFromQuaternion(quaternion);
-
-            // Apply local rotation if specified
-            if (columnData.rotation !== 0) {
-                column.rotateY((columnData.rotation * Math.PI) / 180);
-            }
-
-            structure.add(column);
-        }
-
-        function createBeam(beamData) {
-            const start = new THREE.Vector3(...beamData.start);
-            const end = new THREE.Vector3(...beamData.end);
-            const section = CROSS_SECTIONS[beamData.section];
-            
-            const direction = new THREE.Vector3().subVectors(end, start);
-            const length = direction.length();
-            const midpoint = new THREE.Vector3().addVectors(start, end).multiplyScalar(0.5);
-
-            let geometry;
-            if (section.type === 'rectangular') {
-                geometry = new THREE.BoxGeometry(section.width, section.height, length);
-            } else if (section.type === 'i-beam') {
-                // Simplified I-beam as a box
-                geometry = new THREE.BoxGeometry(section.width, section.height, length);
-            }
-
-            const material = new THREE.MeshPhongMaterial({
-                color: ELEMENT_COLORS.BEAM,
-                shininess: 30
-            });
-
-            const beam = new THREE.Mesh(geometry, material);
-            beam.position.copy(midpoint);
-
-            // Determine beam orientation
-            const horizontal = Math.abs(direction.y) < 0.01;
-            if (horizontal) {
-                if (Math.abs(direction.x) > 0.01) {
-                    // Beam along X-axis
-                    beam.rotation.y = Math.PI / 2;
+            GLTFLoader.prototype.parse = function(data, path, onLoad, onError) {
+                try {
+                    const json = this.parseGLB(data);
+                    const parser = new GLTFParser(json, data);
+                    parser.parse(onLoad, onError);
+                } catch (e) {
+                    if (onError) onError(e);
                 }
-                // Beam along Z-axis needs no rotation for BoxGeometry with dimensions arranged correctly
+            };
+            
+            GLTFLoader.prototype.parseGLB = function(data) {
+                const view = new DataView(data);
+                const magic = view.getUint32(0, true);
+                
+                if (magic !== 0x46546C67) {
+                    throw new Error('Invalid GLB file');
+                }
+                
+                const jsonChunkLength = view.getUint32(12, true);
+                const jsonChunkData = new Uint8Array(data, 20, jsonChunkLength);
+                const jsonString = new TextDecoder().decode(jsonChunkData);
+                
+                return JSON.parse(jsonString);
+            };
+            
+            return GLTFLoader;
+        })();
+        
+        function GLTFParser(json, glbData) {
+            this.json = json;
+            this.glbData = glbData;
+        }
+        
+        GLTFParser.prototype.parse = function(onLoad, onError) {
+            try {
+                const scene = new THREE.Group();
+                const sceneData = this.json.scenes[0];
+                
+                for (let nodeIndex of sceneData.nodes) {
+                    const node = this.parseNode(nodeIndex);
+                    if (node) scene.add(node);
+                }
+                
+                onLoad({ scene: scene });
+            } catch (e) {
+                if (onError) onError(e);
             }
-
-            // Apply local rotation if specified
-            if (beamData.rotation !== 0) {
-                beam.rotateZ((beamData.rotation * Math.PI) / 180);
+        };
+        
+        GLTFParser.prototype.parseNode = function(index) {
+            const nodeData = this.json.nodes[index];
+            const node = new THREE.Group();
+            
+            if (nodeData.name) {
+                node.name = nodeData.name;
             }
-
-            structure.add(beam);
-        }
-
-        function createBrace(braceData) {
-            const start = new THREE.Vector3(...braceData.start);
-            const end = new THREE.Vector3(...braceData.end);
-            const section = CROSS_SECTIONS[braceData.section];
             
-            const direction = new THREE.Vector3().subVectors(end, start);
-            const length = direction.length();
-            const midpoint = new THREE.Vector3().addVectors(start, end).multiplyScalar(0.5);
-
-            let geometry;
-            if (section.type === 'circular') {
-                geometry = new THREE.CylinderGeometry(section.diameter / 2, section.diameter / 2, length, 8);
+            // Apply transformations
+            if (nodeData.translation) {
+                node.position.set(nodeData.translation[0], nodeData.translation[1], nodeData.translation[2]);
             }
-
-            const material = new THREE.MeshPhongMaterial({
-                color: ELEMENT_COLORS.BRACE,
-                shininess: 30
-            });
-
-            const brace = new THREE.Mesh(geometry, material);
-            brace.position.copy(midpoint);
-
-            // Align brace with direction vector
-            const quaternion = new THREE.Quaternion();
-            quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.normalize());
-            brace.setRotationFromQuaternion(quaternion);
-
-            structure.add(brace);
-        }
-
-        function createSlab(slabData) {
-            const points = slabData.points.map(p => new THREE.Vector3(...p));
+            if (nodeData.rotation) {
+                node.quaternion.set(nodeData.rotation[0], nodeData.rotation[1], nodeData.rotation[2], nodeData.rotation[3]);
+            }
+            if (nodeData.scale) {
+                node.scale.set(nodeData.scale[0], nodeData.scale[1], nodeData.scale[2]);
+            }
+            if (nodeData.matrix) {
+                node.matrix.fromArray(nodeData.matrix);
+                node.matrix.decompose(node.position, node.quaternion, node.scale);
+            }
             
-            // Calculate dimensions
-            const width = points[1].distanceTo(points[0]);
-            const depth = points[2].distanceTo(points[1]);
+            if (nodeData.mesh !== undefined) {
+                const mesh = this.parseMesh(nodeData.mesh);
+                if (mesh) {
+                    if (nodeData.name && !mesh.name) {
+                        mesh.name = nodeData.name;
+                    }
+                    node.add(mesh);
+                }
+            }
             
-            // Calculate center
-            const center = new THREE.Vector3();
-            points.forEach(p => center.add(p));
-            center.divideScalar(points.length);
-
-            const geometry = new THREE.BoxGeometry(width, slabData.thickness, depth);
-            const material = new THREE.MeshPhongMaterial({
-                color: ELEMENT_COLORS.SLAB,
-                transparent: true,
-                opacity: 0.6,
-                shininess: 30
-            });
-
-            const slab = new THREE.Mesh(geometry, material);
-            slab.position.copy(center);
-
-            structure.add(slab);
-        }
-
-        function createWall(wallData) {
-            const points = wallData.points.map(p => new THREE.Vector3(...p));
+            if (nodeData.children) {
+                for (let childIndex of nodeData.children) {
+                    const child = this.parseNode(childIndex);
+                    if (child) node.add(child);
+                }
+            }
             
-            // Calculate dimensions
-            const width = points[1].distanceTo(points[0]);
-            const height = points[2].y - points[0].y;
-            
-            // Calculate center
-            const center = new THREE.Vector3();
-            points.forEach(p => center.add(p));
-            center.divideScalar(points.length);
-
-            // Determine orientation
-            const isAlongX = Math.abs(points[1].x - points[0].x) > 0.01;
-            
-            const geometry = isAlongX ? 
-                new THREE.BoxGeometry(width, height, wallData.thickness) :
-                new THREE.BoxGeometry(wallData.thickness, height, width);
-
-            const material = new THREE.MeshPhongMaterial({
-                color: ELEMENT_COLORS.WALL,
-                transparent: true,
-                opacity: 0.4,
-                side: THREE.DoubleSide,
-                shininess: 20
-            });
-
-            const wall = new THREE.Mesh(geometry, material);
-            wall.position.copy(center);
-
-            structure.add(wall);
-        }
-
-        function createSupport(supportData) {
-            const position = new THREE.Vector3(...supportData.location);
+            return node;
+        };
+        
+        GLTFParser.prototype.parseMesh = function(index) {
+            const meshData = this.json.meshes[index];
             const group = new THREE.Group();
-
-            if (supportData.type === 'fixed') {
-                // Fixed support - represented by a pyramid/cone
-                const geometry = new THREE.ConeGeometry(0.3, 0.6, 4);
-                const material = new THREE.MeshPhongMaterial({
-                    color: ELEMENT_COLORS.SUPPORT,
-                    shininess: 30
-                });
-                const cone = new THREE.Mesh(geometry, material);
-                cone.rotation.x = Math.PI;
-                cone.position.y = -0.3;
-                group.add(cone);
-
-                // Add base plate
-                const plateGeom = new THREE.CylinderGeometry(0.4, 0.4, 0.1, 8);
-                const plate = new THREE.Mesh(plateGeom, material);
-                plate.position.y = -0.65;
-                group.add(plate);
-
-            } else if (supportData.type === 'pinned') {
-                // Pinned support - represented by a triangle
-                const shape = new THREE.Shape();
-                shape.moveTo(0, 0);
-                shape.lineTo(-0.3, -0.5);
-                shape.lineTo(0.3, -0.5);
-                shape.lineTo(0, 0);
-
-                const extrudeSettings = { depth: 0.1, bevelEnabled: false };
-                const geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
-                const material = new THREE.MeshPhongMaterial({
-                    color: ELEMENT_COLORS.SUPPORT,
-                    shininess: 30
-                });
-                const triangle = new THREE.Mesh(geometry, material);
-                triangle.position.z = -0.05;
-                group.add(triangle);
-
-                // Add circle at top
-                const circleGeom = new THREE.SphereGeometry(0.15, 16, 16);
-                const circle = new THREE.Mesh(circleGeom, material);
-                circle.position.y = 0;
-                group.add(circle);
-
-            } else if (supportData.type === 'roller') {
-                // Roller support - triangle with rollers
-                const shape = new THREE.Shape();
-                shape.moveTo(0, 0);
-                shape.lineTo(-0.3, -0.5);
-                shape.lineTo(0.3, -0.5);
-                shape.lineTo(0, 0);
-
-                const extrudeSettings = { depth: 0.1, bevelEnabled: false };
-                const geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
-                const material = new THREE.MeshPhongMaterial({
-                    color: ELEMENT_COLORS.SUPPORT,
-                    shininess: 30
-                });
-                const triangle = new THREE.Mesh(geometry, material);
-                triangle.position.z = -0.05;
-                group.add(triangle);
-
-                // Add rollers
-                const rollerGeom = new THREE.CylinderGeometry(0.1, 0.1, 0.15, 16);
-                const roller1 = new THREE.Mesh(rollerGeom, material);
-                roller1.position.set(-0.15, -0.6, 0);
-                roller1.rotation.z = Math.PI / 2;
-                group.add(roller1);
-
-                const roller2 = new THREE.Mesh(rollerGeom, material);
-                roller2.position.set(0.15, -0.6, 0);
-                roller2.rotation.z = Math.PI / 2;
-                group.add(roller2);
+            
+            if (meshData.name) {
+                group.name = meshData.name;
             }
-
-            group.position.copy(position);
-            structure.add(group);
-        }
+            
+            for (let i = 0; i < meshData.primitives.length; i++) {
+                const primitive = meshData.primitives[i];
+                const geometry = this.parseGeometry(primitive);
+                
+                // Check if vertex colors exist
+                const hasVertexColors = primitive.attributes.COLOR_0 !== undefined;
+                
+                // Determine color based on element type from name
+                let elementColor = 0x888888; // Default gray
+                const name = (meshData.name || '').toLowerCase();
+                
+                if (name.includes('beam')) {
+                    elementColor = 0x3498db; // Blue for beams
+                } else if (name.includes('column')) {
+                    elementColor = 0xe74c3c; // Red for columns
+                } else if (name.includes('brace') || name.includes('bracing')) {
+                    elementColor = 0x2ecc71; // Green for braces
+                } else if (name.includes('slab') || name.includes('floor')) {
+                    elementColor = 0x95a5a6; // Gray for slabs
+                } else if (name.includes('wall')) {
+                    elementColor = 0xf39c12; // Orange for walls
+                } else if (name.includes('foundation') || name.includes('footing')) {
+                    elementColor = 0x8e44ad; // Purple for foundation
+                } else if (name.includes('truss')) {
+                    elementColor = 0x1abc9c; // Teal for trusses
+                } else if (name.includes('joist')) {
+                    elementColor = 0x16a085; // Dark teal for joists
+                } else if (name.includes('girder')) {
+                    elementColor = 0x2980b9; // Dark blue for girders
+                } else if (name.includes('stair')) {
+                    elementColor = 0xe67e22; // Dark orange for stairs
+                } else if (name.includes('railing') || name.includes('handrail')) {
+                    elementColor = 0x34495e; // Dark gray for railings
+                } else if (name.includes('door')) {
+                    elementColor = 0xd35400; // Brown for doors
+                } else if (name.includes('window')) {
+                    elementColor = 0x3498db; // Light blue for windows
+                } else if (name.includes('roof')) {
+                    elementColor = 0xc0392b; // Dark red for roof
+                }
+                
+                // Get material properties
+                let materialParams = {
+                    color: elementColor,
+                    roughness: 0.7,
+                    metalness: 0.3,
+                    vertexColors: hasVertexColors
+                };
+                
+                // If vertex colors exist, use them (they will override the base color)
+                if (!hasVertexColors && primitive.material !== undefined && this.json.materials) {
+                    const matData = this.json.materials[primitive.material];
+                    if (matData.pbrMetallicRoughness) {
+                        const pbr = matData.pbrMetallicRoughness;
+                        if (pbr.baseColorFactor) {
+                            // Check if the material color is not black (0,0,0)
+                            const matColor = pbr.baseColorFactor;
+                            if (matColor[0] > 0.01 || matColor[1] > 0.01 || matColor[2] > 0.01) {
+                                materialParams.color = new THREE.Color(
+                                    matColor[0],
+                                    matColor[1],
+                                    matColor[2]
+                                );
+                            }
+                        }
+                        if (pbr.metallicFactor !== undefined) {
+                            materialParams.metalness = pbr.metallicFactor;
+                        }
+                        if (pbr.roughnessFactor !== undefined) {
+                            materialParams.roughness = pbr.roughnessFactor;
+                        }
+                    }
+                }
+                
+                const material = new THREE.MeshStandardMaterial(materialParams);
+                
+                const mesh = new THREE.Mesh(geometry, material);
+                if (meshData.primitives.length > 1) {
+                    mesh.name = (meshData.name || 'Mesh') + '_primitive_' + i;
+                } else {
+                    mesh.name = meshData.name || 'Mesh';
+                }
+                group.add(mesh);
+            }
+            
+            return group;
+        };
+        
+        GLTFParser.prototype.parseGeometry = function(primitive) {
+            const geometry = new THREE.BufferGeometry();
+            
+            // Parse positions
+            if (primitive.attributes.POSITION !== undefined) {
+                const positions = this.parseAccessor(primitive.attributes.POSITION);
+                geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            }
+            
+            // Parse normals
+            if (primitive.attributes.NORMAL !== undefined) {
+                const normals = this.parseAccessor(primitive.attributes.NORMAL);
+                geometry.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
+            } else {
+                geometry.computeVertexNormals();
+            }
+            
+            // Parse UVs
+            if (primitive.attributes.TEXCOORD_0 !== undefined) {
+                const uvs = this.parseAccessor(primitive.attributes.TEXCOORD_0);
+                geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+            }
+            
+            // Parse vertex colors - PRIORITY for coloring
+            if (primitive.attributes.COLOR_0 !== undefined) {
+                const colorAccessor = this.json.accessors[primitive.attributes.COLOR_0];
+                const colors = this.parseAccessor(primitive.attributes.COLOR_0);
+                
+                // Check if colors are RGB (3 components) or RGBA (4 components)
+                const colorSize = {
+                    VEC3: 3,
+                    VEC4: 4
+                }[colorAccessor.type] || 3;
+                
+                // If RGBA, we need to extract just RGB
+                if (colorSize === 4) {
+                    const rgbColors = new Float32Array((colors.length / 4) * 3);
+                    for (let i = 0, j = 0; i < colors.length; i += 4, j += 3) {
+                        rgbColors[j] = colors[i];
+                        rgbColors[j + 1] = colors[i + 1];
+                        rgbColors[j + 2] = colors[i + 2];
+                    }
+                    geometry.setAttribute('color', new THREE.BufferAttribute(rgbColors, 3));
+                } else {
+                    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+                }
+            }
+            
+            // Parse indices
+            if (primitive.indices !== undefined) {
+                const indices = this.parseAccessor(primitive.indices);
+                geometry.setIndex(new THREE.BufferAttribute(indices, 1));
+            }
+            
+            return geometry;
+        };
+        
+        GLTFParser.prototype.parseAccessor = function(index) {
+            const accessor = this.json.accessors[index];
+            const bufferView = this.json.bufferViews[accessor.bufferView];
+            
+            const view = new DataView(this.glbData);
+            const jsonChunkLength = view.getUint32(12, true);
+            const binaryChunkStart = 20 + jsonChunkLength + 8;
+            
+            const byteOffset = binaryChunkStart + (bufferView.byteOffset || 0) + (accessor.byteOffset || 0);
+            
+            const TypedArray = {
+                5126: Float32Array,
+                5123: Uint16Array,
+                5125: Uint32Array
+            }[accessor.componentType];
+            
+            const count = accessor.count * {
+                SCALAR: 1,
+                VEC2: 2,
+                VEC3: 3,
+                VEC4: 4
+            }[accessor.type];
+            
+            return new TypedArray(this.glbData, byteOffset, count);
+        };
 
         // ============================================
         // INTERACTION HANDLERS
@@ -1226,7 +1174,7 @@
         }
 
         function onMouseMove(e) {
-            if (isDragging) {
+            if (isDragging && model) {
                 const deltaX = e.clientX - mouseX;
                 const deltaY = e.clientY - mouseY;
                 
@@ -1356,15 +1304,18 @@
 
             updateWalkMovement();
 
-            structure.rotation.y += (targetRotationY - structure.rotation.y) * 0.1;
-            structure.rotation.x += (targetRotationX - structure.rotation.x) * 0.1;
+            if (model) {
+                model.rotation.y += (targetRotationY - model.rotation.y) * 0.1;
+                model.rotation.x += (targetRotationX - model.rotation.x) * 0.1;
+                
+                // Continuous slow rotation
+                model.rotation.y += 0.001;
+            }
 
             cameraTarget.x = cameraPan.x;
             cameraTarget.z = cameraPan.z;
             
             camera.lookAt(cameraTarget);
-
-            structure.rotation.y += 0.001;
 
             renderer.render(scene, camera);
         }
