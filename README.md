@@ -9,13 +9,9 @@ You can see the live viewer at: `https://mmmansuri.github.io/IFC2GLB/`
 ## ✨ Features
 
 - **Interactive 3D Viewing**: Rotate, pan, and zoom through your structural models
-- **Smart Element Coloring**: Automatically color-codes structural elements (beams, columns, walls, slabs, etc.)
-- **Vertex Color Support**: Preserves and displays vertex colors from your GLB files
 - **Dark/Light Canvas**: Toggle between light and dark canvas backgrounds
 - **Fullscreen Mode**: Immersive fullscreen viewing experience
 - **Keyboard Navigation**: Use WASD or arrow keys to navigate through the model
-- **Responsive Design**: Works seamlessly on desktop, tablet, and mobile devices
-- **Professional UI**: Modern gradient backgrounds with animated starfield effects
 - **No Installation Required**: Runs entirely in the browser
 
 ## 🚀 Getting Started
@@ -38,8 +34,8 @@ Before using this viewer, you need to convert your IFC file to GLB format:
 
 1. Clone this repository:
    ```bash
-   git clone https://github.com/YOUR-USERNAME/YOUR-REPOSITORY-NAME.git
-   cd YOUR-REPOSITORY-NAME
+   git clone ... .git
+   cd repo
    ```
 
 2. Place your converted `model.glb` file in the root directory (same location as the HTML file)
