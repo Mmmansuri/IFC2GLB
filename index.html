@@ -720,22 +720,36 @@
         // IFC Parser
         async function loadAndParseIFC() {
             try {
+                console.log('Attempting to load model.ifc...');
                 const response = await fetch('model.ifc');
+                console.log('Fetch response status:', response.status);
+                
                 if (!response.ok) {
-                    throw new Error('IFC file not found');
+                    throw new Error(`IFC file not found (status: ${response.status})`);
                 }
+                
                 const ifcText = await response.text();
+                console.log('IFC file loaded, length:', ifcText.length);
+                console.log('First 200 chars:', ifcText.substring(0, 200));
                 
                 const entities = parseIFCFile(ifcText);
+                console.log('Parsed entities count:', Object.keys(entities).length);
+                
                 const parsedData = extractStructuralData(entities);
+                console.log('Extracted columns:', parsedData.columns.length);
+                console.log('Extracted beams:', parsedData.beams.length);
                 
                 if (parsedData.columns.length > 0 || parsedData.beams.length > 0) {
+                    console.log('Using parsed IFC data!');
                     ifcData = parsedData;
                     updateUI();
+                } else {
+                    console.warn('No structural elements found in IFC, using default data');
                 }
                 
             } catch (error) {
-                console.warn('Could not load model.ifc, using default data:', error);
+                console.error('Error loading model.ifc:', error);
+                console.log('Using default hardcoded data');
             }
             
             hideLoading();
